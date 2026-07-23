@@ -1,6 +1,5 @@
 import os
 import logging
-import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -32,7 +31,7 @@ TELEBIRR_NO = "0908676709"
 
 ENTRY_FEE = 10.0
 MIN_DEPOSIT = 10.0
-MIN_WITHDRAW = 100.0  # ዝቅተኛ ብር ማውጫ 100 ETB
+MIN_WITHDRAW = 100.0
 
 user_balances = {}
 waiting_lobby = []
@@ -42,7 +41,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# ዋናው መነሻ ገጽ (3 ቁልፎች ያሉት)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     balance = user_balances.get(user_id, 0.0)
@@ -65,7 +63,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.callback_query:
         await update.callback_query.message.reply_text(text_message, reply_markup=reply_markup, parse_mode='Markdown')
 
-# Button Handler
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -74,7 +71,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == 'play_10':
         balance = user_balances.get(user_id, 0.0)
-        
         if user_id in waiting_lobby:
             await query.message.reply_text("⚠️ እርስዎ አስቀድመው ጨዋታ በመጠበቅ ላይ ይገኛሉ።")
             return
@@ -85,7 +81,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_balances[user_id] -= ENTRY_FEE
         waiting_lobby.append(user_id)
-
         await query.message.reply_text("✅ ተመዝግበዋል! ጨዋታው ሲጀምር ካርድ መምረጫው ይደርስዎታል።")
 
     elif data == 'deposit':
@@ -127,11 +122,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_user_id = int(data.split('_')[2])
         user_balances[target_user_id] = user_balances.get(target_user_id, 0.0) + 10.0
         
-        await query.edit_message_caption(caption=f"{query.message.caption if query.message.caption else query.message.text}\n\n✅ **ተፈቅዷል! (10 ETB ተጨምሯል)**")
-        await context.bot.send_message(
-            chat_id=target_user_id, 
-            text="🎉 ዲፖዚትዎ ተረጋግጧል! 10 ETB ሂሳብዎ ላይ ተጨምሯል። /start ብለው ይጫወቱ።"
-        )
+        # የአድሚኑን መልእክት ማስተካከል
+        if query.message.caption:
+            await query.edit_message_caption(caption=f"{query.message.caption}\n\n✅ **ተፈቅዷል! (10 ETB ተጨምሯል)**")
+        else:
+            await query.edit_message_text(text=f"{query.message.text}\n\n✅ **ተፈቅዷል! (10 ETB ተጨምሯል)**")
+            
+        # ለተጠቃሚው ማሳወቅ
+        try:
+            await context.bot.send_message(
+                chat_id=target_user_id, 
+                text="🎉 ዲፖዚትዎ ተረጋግጧል! 10 ETB ሂሳብዎ ላይ ተጨምሯል። /start ብለው ቀሪ ሂሳብዎን ማየት ይችላሉ።"
+            )
+        except Exception as e:
+            logging.error(f"Failed to send msg to user: {e}")
 
     # ADMIN: Deposit Reject
     elif data.startswith('reject_dep_'):
@@ -141,11 +145,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         target_user_id = int(data.split('_')[2])
         
-        await query.edit_message_caption(caption=f"{query.message.caption if query.message.caption else query.message.text}\n\n❌ **ውድቅ ተደርጓል (Rejected)!**")
-        await context.bot.send_message(
-            chat_id=target_user_id, 
-            text="❌ የላኩት ደረሰኝ ውድቅ ተደርጓል። እባክዎን ትክክለኛ ደረሰኝ ይላኩ።"
-        )
+        if query.message.caption:
+            await query.edit_message_caption(caption=f"{query.message.caption}\n\n❌ **ውድቅ ተደርጓል (Rejected)!**")
+        else:
+            await query.edit_message_text(text=f"{query.message.text}\n\n❌ **ውድቅ ተደርጓል (Rejected)!**")
+            
+        try:
+            await context.bot.send_message(
+                chat_id=target_user_id, 
+                text="❌ የላኩት ደረሰኝ ውድቅ ተደርጓል። እባክዎን ትክክለኛ ደረሰኝ ይላኩ።"
+            )
+        except Exception as e:
+            logging.error(f"Failed to send msg to user: {e}")
 
     # ADMIN: Withdraw Approve
     elif data.startswith('approve_wd_'):
@@ -186,7 +197,6 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     action = context.user_data.get('waiting_for_action')
 
-    # DEPOSIT REQUEST
     if action == 'deposit':
         context.user_data['waiting_for_action'] = None
         await update.message.reply_text("⏳ ደረሰኝዎ ደርሶናል! አድሚኑ እስኪያረጋግጥ ድረስ ትንሽ ይጠብቁ።")
@@ -219,7 +229,6 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                     parse_mode='Markdown'
                 )
 
-    # WITHDRAW REQUEST
     elif action == 'withdraw':
         context.user_data['waiting_for_action'] = None
         req_text = update.message.text
@@ -265,5 +274,5 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.PHOTO | filters.TEXT & ~filters.COMMAND, handle_user_messages))
     
-    print("ቦቱ እና Keep-Alive ሰርቨሩ ስራ ጀምረዋል...")
+    print("ቦቱ በትክክል መስራት ጀምሯል...")
     app.run_polling(poll_interval=1.0)
