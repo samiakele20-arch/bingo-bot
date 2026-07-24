@@ -1,138 +1,188 @@
 <!DOCTYPE html>
 <html lang="am">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoodBingo Mini App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-        body { background-color: #1a1e29; color: white; display: flex; flex-direction: column; height: 100vh; overflow-x: hidden; }
-        
-        /* Top Bar */
-        .header { display: flex; justify-content: space-between; padding: 10px; background: #0f121a; font-size: 12px; font-weight: bold; }
-        .header div { background: #2a2f3d; padding: 5px 10px; border-radius: 5px; }
-        .ball-call { background: #e67e22; color: white; font-size: 18px; text-align: center; padding: 8px; font-weight: bold; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SamBingo Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background-color: #121927; color: #ffffff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
-        /* Main Game Layout */
-        .game-container { display: flex; flex: 1; padding: 5px; gap: 5px; }
+    /* Top Navigation / Stats Bar */
+    .top-bar { display: flex; justify-content: space-between; background-color: #1e293b; padding: 10px; font-size: 13px; font-weight: bold; border-bottom: 2px solid #334155; }
+    .stat-box { background: #0f172a; padding: 6px 12px; border-radius: 6px; text-align: center; }
+    .stat-label { color: #94a3b8; font-size: 10px; display: block; }
+    .stat-value { color: #4ade80; font-size: 14px; }
 
-        /* Board 1-75 Numbers (Left Side) */
-        .board-75 { width: 35%; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: #0f121a; padding: 4px; border-radius: 5px; max-height: 80vh; overflow-y: auto; }
-        .num-cell { background: #fff; color: #333; font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; height: 22px; border-radius: 3px; }
-        .num-cell.called { background: #f1c40f; color: #000; font-weight: bold; }
+    /* Main Container */
+    .app-body { display: flex; flex: 1; overflow: hidden; padding: 5px; gap: 5px; }
 
-        /* Card Section (Right Side) */
-        .cards-container { width: 65%; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-        .bingo-card { background: #ffffff; border-radius: 8px; padding: 5px; color: black; }
-        .bingo-header { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-weight: bold; color: white; margin-bottom: 3px; }
-        .bingo-header div { padding: 3px; border-radius: 3px; }
-        .b-b { background: #2980b9; } .b-i { background: #c0392b; } .b-n { background: #f39c12; } .b-g { background: #27ae60; } .b-o { background: #8e44ad; }
+    /* 1-75 Board Column Layout */
+    .board-75 { width: 35%; display: flex; flex-direction: column; background: #0f172a; border-radius: 8px; padding: 3px; }
+    .bingo-cols { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; height: 100%; }
+    .col { display: flex; flex-direction: column; gap: 2px; }
+    .col-header { text-align: center; font-weight: bold; padding: 4px 0; border-radius: 3px; font-size: 12px; }
+    
+    /* Header Colors */
+    .col-b { background-color: #2563eb; }
+    .col-i { background-color: #dc2626; }
+    .col-n { background-color: #d97706; }
+    .col-g { background-color: #16a34a; }
+    .col-o { background-color: #9333ea; }
 
-        .bingo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; text-align: center; }
-        .cell { background: #f0f0f0; border: 1px solid #ccc; font-weight: bold; font-size: 14px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; }
-        .cell.selected { background: #2ecc71 !important; color: white; border-color: #27ae60; }
-        .cell.star { background: #27ae60; color: white; font-size: 18px; }
+    .num-cell { background: #334155; text-align: center; font-size: 10px; padding: 3px 0; border-radius: 2px; font-weight: bold; }
+    .num-cell.called { background: #f59e0b; color: #000; }
 
-        .bingo-btn { background: #2980b9; color: white; border: none; width: 100%; padding: 8px; font-weight: bold; font-size: 16px; border-radius: 0 0 8px 8px; cursor: pointer; margin-top: 3px; }
-    </style>
+    /* Game / Buying Area */
+    .main-area { width: 65%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 5px; overflow-y: auto; }
+
+    /* Card Selector Grid */
+    .card-picker-title { font-size: 14px; margin-bottom: 8px; text-align: center; color: #f3f4f6; }
+    .picker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; }
+    .picker-slot { background: #1e293b; border: 2px dashed #475569; border-radius: 8px; padding: 15px 5px; text-align: center; cursor: pointer; }
+    .picker-slot.selected { background: #16a34a; border-color: #22c55e; }
+    .slot-icon { font-size: 18px; display: block; }
+    .slot-text { font-size: 11px; margin-top: 4px; display: block; }
+
+    /* Bingo Card Display */
+    .card-container { width: 100%; max-width: 280px; background: #ffffff; color: #000000; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+    .card-header { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-weight: bold; color: #fff; font-size: 14px; }
+    .card-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 4px; background: #cbd5e1; }
+    .card-cell { background: #fff; height: 38px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border-radius: 3px; cursor: pointer; }
+    .card-cell.matched { background: #22c55e; color: white; }
+    .card-cell.star { background: #3b82f6; color: white; font-size: 18px; }
+
+    /* Action Buttons */
+    .btn-bingo { width: 100%; padding: 10px; background: #0284c7; color: white; border: none; font-weight: bold; font-size: 16px; border-radius: 6px; cursor: pointer; margin-top: 5px; }
+  </style>
 </head>
 <body>
 
-    <!-- Header Stats -->
-    <div class="header">
-        <div>DERASH: <span style="color:#2ecc71">1000 ETB</span></div>
-        <div>BALLS: <span id="ball-count">0</span>/75</div>
-        <div>PLAYERS: <span>12</span></div>
+  <!-- Top Stats -->
+  <div class="top-bar">
+    <div class="stat-box">
+      <span class="stat-label">DERASH</span>
+      <span class="stat-value" id="derashVal">0 ETB</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">BALLS</span>
+      <span class="stat-value" id="ballsVal">0/75</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">PLAYERS</span>
+      <span class="stat-value" id="playersVal">0</span>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <!-- Vertical 1-75 Numbers Board -->
+    <div class="board-75">
+      <div class="bingo-cols">
+        <div class="col"><div class="col-header col-b">B</div><div id="col-b-list"></div></div>
+        <div class="col"><div class="col-header col-i">I</div><div id="col-i-list"></div></div>
+        <div class="col"><div class="col-header col-n">N</div><div id="col-n-list"></div></div>
+        <div class="col"><div class="col-header col-g">G</div><div id="col-g-list"></div></div>
+        <div class="col"><div class="col-header col-o">O</div><div id="col-o-list"></div></div>
+      </div>
     </div>
 
-    <!-- Live Called Ball -->
-    <div class="ball-call" id="current-ball">🎮 ጨዋታውን ለመጀመር ይዘጋጁ...</div>
+    <!-- Game / Selection Screen -->
+    <div class="main-area">
+      <!-- Card Purchasing Area -->
+      <div id="purchasingSection" style="width: 100%;">
+        <div class="card-picker-title">ካርድ ይምረጡ (10 ETB / ካርድ)</div>
+        <div class="picker-grid">
+          <div class="picker-slot" onclick="toggleSlot(this, 1)">
+            <span class="slot-icon">➕</span>
+            <span class="slot-text">SLOT 1</span>
+          </div>
+          <div class="picker-slot" onclick="toggleSlot(this, 2)">
+            <span class="slot-icon">➕</span>
+            <span class="slot-text">SLOT 2</span>
+          </div>
+        </div>
+      </div>
 
-    <div class="game-container">
-        <!-- 1-75 Main Board -->
-        <div class="board-75" id="board-75"></div>
-
-        <!-- Player Bingo Cards -->
-        <div class="cards-container" id="cards-container"></div>
+      <!-- Active Game Card View -->
+      <div id="gameSection" style="display: none; width: 100%;">
+        <div class="card-container">
+          <div class="card-header">
+            <div class="col-b">B</div>
+            <div class="col-i">I</div>
+            <div class="col-n">N</div>
+            <div class="col-g">G</div>
+            <div class="col-o">O</div>
+          </div>
+          <div class="card-grid" id="bingoCardGrid"></div>
+          <button class="btn-bingo" onclick="claimBingo()">BINGO!</button>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) tg.expand();
 
-        // Generate 1-75 Board
-        const board75 = document.getElementById('board-75');
-        for (let i = 1; i <= 75; i++) {
-            let cell = document.createElement('div');
-            cell.className = 'num-cell';
-            cell.id = `board-num-${i}`;
-            cell.innerText = i;
-            board75.appendChild(cell);
+    let selectedCardsCount = 0;
+    let cardPrice = 10;
+    let pricePerCardToDerash = 8;
+
+    // Generate Vertical Board 1-75
+    function initBoard() {
+      const ranges = {
+        b: [1, 15],
+        i: [16, 30],
+        n: [31, 45],
+        g: [46, 60],
+        o: [61, 75]
+      };
+
+      for (let key in ranges) {
+        const container = document.getElementById(`col-${key}-list`);
+        container.innerHTML = '';
+        for (let i = ranges[key][0]; i <= ranges[key][1]; i++) {
+          const div = document.createElement('div');
+          div.className = 'num-cell';
+          div.id = `cell-${i}`;
+          div.innerText = i;
+          container.appendChild(div);
         }
+      }
+    }
 
-        // Generate Sample Bingo Card
-        function createCard(cardId) {
-            const container = document.getElementById('cards-container');
-            const card = document.createElement('div');
-            card.className = 'bingo-card';
-
-            card.innerHTML = `
-                <div class="bingo-header">
-                    <div class="b-b">B</div><div class="b-i">I</div><div class="b-n">N</div><div class="b-g">G</div><div class="b-o">O</div>
-                </div>
-                <div class="bingo-grid" id="grid-${cardId}"></div>
-                <button class="bingo-btn" onclick="claimBingo(${cardId})">BINGO!</button>
-            `;
-            container.appendChild(card);
-
-            const grid = document.getElementById(`grid-${cardId}`);
-            
-            // Random Card Numbers Generator
-            let nums = {
-                b: getRandomNums(1, 15, 5),
-                i: getRandomNums(16, 30, 5),
-                n: getRandomNums(31, 45, 5),
-                g: getRandomNums(46, 60, 5),
-                o: getRandomNums(61, 75, 5)
-            };
-
-            for (let r = 0; r < 5; r++) {
-                ['b', 'i', 'n', 'g', 'o'].forEach((col, cIndex) => {
-                    let cell = document.createElement('div');
-                    cell.className = 'cell';
-                    if (col === 'n' && r === 2) {
-                        cell.innerText = '★';
-                        cell.classList.add('star');
-                    } else {
-                        cell.innerText = nums[col][r];
-                        // TAP / TOUCH - Color Change to GREEN
-                        cell.onclick = function() {
-                            this.classList.toggle('selected');
-                        };
-                    }
-                    grid.appendChild(cell);
-                });
-            }
+    // Toggle Selection of Cards
+    function toggleSlot(element, slotId) {
+      if (element.classList.contains('selected')) {
+        element.classList.remove('selected');
+        element.querySelector('.slot-icon').innerText = '➕';
+        selectedCardsCount--;
+      } else {
+        if (selectedCardsCount >= 2) {
+          alert('ከ 2 ካርድ በላይ መግዛት አይችሉም!');
+          return;
         }
+        element.classList.add('selected');
+        element.querySelector('.slot-icon').innerText = '✅';
+        selectedCardsCount++;
+      }
+      updateDerash();
+    }
 
-        function getRandomNums(min, max, count) {
-            let arr = [];
-            while(arr.length < count){
-                let r = Math.floor(Math.random() * (max - min + 1)) + min;
-                if(arr.indexOf(r) === -1) arr.push(r);
-            }
-            return arr;
-        }
+    // Dynamic Derash Calculation
+    function updateDerash() {
+      let totalDerash = selectedCardsCount * pricePerCardToDerash;
+      document.getElementById('derashVal').innerText = `${totalDerash} ETB`;
+      document.getElementById('playersVal').innerText = selectedCardsCount > 0 ? 1 : 0;
+    }
 
-        function claimBingo(cardId) {
-            tg.sendData(`BINGO_CLAIM_${cardId}`);
-            alert("🎉 BINGO ጥያቄዎ ተልኳል!");
-        }
+    function claimBingo() {
+      if (tg) tg.sendData(JSON.stringify({ action: "bingo_claim" }));
+      else alert("BINGO Clamed!");
+    }
 
-        // Load 1 Card for Preview
-        createCard(1);
-
-    </script>
+    initBoard();
+  </script>
 </body>
 </html>
