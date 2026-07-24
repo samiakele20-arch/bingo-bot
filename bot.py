@@ -33,7 +33,6 @@ async def deposit_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # የ 10 ብር ገደብ ጽሁፉ ተወግዷል!
     msg = (
         "📥 **የዲፖዚት መመሪያ:-**\n\n"
         "1. በ Telebirr ቁጥር `0908676709` የፈለጉትን የብር መጠን ያስገቡ።\n"
@@ -46,24 +45,21 @@ async def handle_deposit_request(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     text = update.message.caption or update.message.text or ""
     
-    # ከ SMS ውስጥ የተላከውን የብር መጠን በራስ-ሰር ይፈልጋል
-    numbers = re.findall(r'ETB\s*([\d\.]+)|([\d\.]+)\s*ETB', text, re.IGNORECASE)
-    amount = 0
-    if numbers:
-        for match in numbers[0]:
-            if match:
-                try:
-                    amount = float(match)
-                    break
-                except:
-                    pass
+    # ከ SMS ውስጥ የተላከውን ትክክለኛ የብር መጠን ይለያል (ምሳሌ: ETB 25.0)
+    match = re.search(r'ETB\s*([\d\.]+)|([\d\.]+)\s*ETB', text, re.IGNORECASE)
+    detected_amount = 0.0
+    if match:
+        val_str = match.group(1) or match.group(2)
+        try:
+            detected_amount = float(val_str)
+        except:
+            detected_amount = 0.0
 
-    # አድሚን ጋር የሚላክ በተን (መጠኑ ካልታወቀ አድሚኑ እራሱ ያርመዋል)
-    btn_text = f"✅ Approve ({amount} ETB)" if amount > 0 else "✅ Approve"
-    
+    btn_text = f"✅ Approve ({detected_amount} ETB)" if detected_amount > 0 else "✅ Approve"
+
     admin_keyboard = [
         [
-            InlineKeyboardButton(btn_text, callback_data=f"app_{user.id}_{amount}"),
+            InlineKeyboardButton(btn_text, callback_data=f"app_{user.id}_{detected_amount}"),
             InlineKeyboardButton("❌ Reject", callback_data=f"rej_{user.id}")
         ]
     ]
@@ -94,15 +90,14 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     data = query.data.split("_")
     action = data[0]
     user_id = int(data[1])
-    amount = float(data[2]) if len(data) > 2 else 0.0
 
     if action == "app":
-        # አድሚኑ Approve ሲል ያንን ብር ይደምርለታል
+        amount = float(data[2])
         user_balances[user_id] = user_balances.get(user_id, 0.0) + amount
         await query.edit_message_text(f"✅ ተጸድቋል! {amount} ETB ለ ID `{user_id}` ተደምሯል።")
         await context.bot.send_message(
             chat_id=user_id, 
-            text=f"🎉 የ Deposit ጥያቄዎ ጸድቋል! **{amount} ETB** ሂሳብዎ ላይ ተጨምሯል።\n\nአዲሱን ባላንስ ለማየት **/start** ይበሉ።",
+            text=f"🎉 የ Deposit ጥያቄዎ ጸድቋል! **{amount} ETB** ሂሳብዎ ላይ ተጨምሯል።\n\nአዲሱን ባላንስ በ Mini App ለማየት **/start** ብለው ድጋሚ ይክፈቱ።",
             parse_mode="Markdown"
         )
 
