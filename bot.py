@@ -1,5 +1,6 @@
 import os
 import logging
+import random
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -34,12 +35,34 @@ MIN_DEPOSIT = 10.0
 MIN_WITHDRAW = 100.0
 
 user_balances = {}
-waiting_lobby = []
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+
+# 5x5 የቢንጎ ካርድ ማመንጫ ፈንክሽን
+def generate_bingo_card():
+    col_b = random.sample(range(1, 16), 5)
+    col_i = random.sample(range(16, 31), 5)
+    col_n = random.sample(range(31, 46), 5)
+    col_g = random.sample(range(46, 61), 5)
+    col_o = random.sample(range(61, 76), 5)
+    
+    card_str = "🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧\n"
+    card_str += "  **B**   |  **I**   |  **N**  |  **G**  |  **O**  \n"
+    card_str += "───────────────\n"
+    
+    for row in range(5):
+        b = f"{col_b[row]:02d}"
+        i = f"{col_i[row]:02d}"
+        n = "⭐" if row == 2 else f"{col_n[row]:02d}"
+        g = f"{col_g[row]:02d}"
+        o = f"{col_o[row]:02d}"
+        card_str += f" `{b}` | `{i}` | `{n}` | `{g}` | `{o}` \n"
+        
+    card_str += "🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧"
+    return card_str
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -69,19 +92,70 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
 
+    # PLAY ሲነካ ወደ Room ይገባል (ብር ገና አይቀነስም!)
     if data == 'play_10':
         balance = user_balances.get(user_id, 0.0)
-        if user_id in waiting_lobby:
-            await query.message.reply_text("⚠️ እርስዎ አስቀድመው ጨዋታ በመጠበቅ ላይ ይገኛሉ።")
-            return
 
         if balance < ENTRY_FEE:
             await query.message.reply_text(f"❌ ለጨዋታው በቂ ሂሳብ የለዎትም። ቢያንስ {ENTRY_FEE:.0f} ETB ያስፈልጋል!")
             return
 
+        # የካርድ መምረጫ Room ባትኖች (Orange Theme)
+        card_keyboard = [
+            [
+                InlineKeyboardButton("🟧 Card #1", callback_data='select_card_1'),
+                InlineKeyboardButton("🟧 Card #2", callback_data='select_card_2')
+            ],
+            [
+                InlineKeyboardButton("🟧 Card #3", callback_data='select_card_3'),
+                InlineKeyboardButton("🟧 Card #4", callback_data='select_card_4')
+            ],
+            [InlineKeyboardButton("🎲 Random Card (በዘፈቀደ መምረጫ)", callback_data='select_card_random')],
+            [InlineKeyboardButton("🔙 ወደ ዋናው ገጽ ተመለስ", callback_data='back_to_start')]
+        ]
+        reply_markup = InlineKeyboardMarkup(card_keyboard)
+
+        await query.message.reply_text(
+            "🟠 **ወደ ቢንጎ ካርድ መምረጫ ክፍል እንኳን ደህና መጡ!** 🟠\n\n"
+            f"💰 የእርስዎ አሁናዊ ቀሪ ሂሳብ፦ `{balance:.2f} ETB`\n"
+            f"🎫 የጨዋታው ዋጋ፦ **10 ETB**\n\n"
+            "👇 እባክዎን ለመጫወት የሚፈልጉትን የካርድ ቁጥር ይምረጡ፦",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    # ካርድ ሲመረጥ ብቻ 10 ብር ተቀንሶ ካርዱ ይወጣል
+    elif data.startswith('select_card_'):
+        balance = user_balances.get(user_id, 0.0)
+        
+        if balance < ENTRY_FEE:
+            await query.message.reply_text("❌ የላከው ሂሳብ በቂ አይደለም! እባክዎን አስቀድመው ዲፖዚት ያድርጉ።")
+            return
+
+        # 10 ብሩ አሁን ይቀነሳል
         user_balances[user_id] -= ENTRY_FEE
-        waiting_lobby.append(user_id)
-        await query.message.reply_text("✅ ተመዝግበዋል! ጨዋታው ሲጀምር ካርድ መምረጫው ይደርስዎታል።")
+        card_num = data.split('_')[2]
+        
+        bingo_card_text = generate_bingo_card()
+        
+        card_title = "🎲 Random Bingo Card" if card_num == 'random' else f"🎴 Bingo Card #{card_num}"
+        
+        msg = (
+            f"🎉 **ካርድዎ በትክክል ተመርጧል!**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📌 **{card_title}**\n\n"
+            f"{bingo_card_text}\n\n"
+            f"✅ **10 ETB ከቀሪ ሂሳብዎ ተቀንሷል።**\n"
+            f"💰 አሁናዊ ቀሪ ሂሳብዎ፦ `{user_balances[user_id]:.2f} ETB`\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            "⏳ *ጨዋታው ተጫዋቾች ተሟልተው ሲጀምሩ ቁጥሮች መውጣት ይጀምራሉ...*"
+        )
+        
+        keyboard = [[InlineKeyboardButton("🔙 ወደ ዋናው ገጽ ተመለስ", callback_data='back_to_start')]]
+        await query.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+    elif data == 'back_to_start':
+        await start(update, context)
 
     elif data == 'deposit':
         context.user_data['waiting_for_action'] = 'deposit'
@@ -122,20 +196,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_user_id = int(data.split('_')[2])
         user_balances[target_user_id] = user_balances.get(target_user_id, 0.0) + 10.0
         
-        # የአድሚኑን መልእክት ማስተካከል
         if query.message.caption:
             await query.edit_message_caption(caption=f"{query.message.caption}\n\n✅ **ተፈቅዷል! (10 ETB ተጨምሯል)**")
         else:
             await query.edit_message_text(text=f"{query.message.text}\n\n✅ **ተፈቅዷል! (10 ETB ተጨምሯል)**")
             
-        # ለተጠቃሚው ማሳወቅ
         try:
             await context.bot.send_message(
                 chat_id=target_user_id, 
                 text="🎉 ዲፖዚትዎ ተረጋግጧል! 10 ETB ሂሳብዎ ላይ ተጨምሯል። /start ብለው ቀሪ ሂሳብዎን ማየት ይችላሉ።"
             )
         except Exception as e:
-            logging.error(f"Failed to send msg to user: {e}")
+            logging.error(f"Failed to send msg: {e}")
 
     # ADMIN: Deposit Reject
     elif data.startswith('reject_dep_'):
@@ -156,7 +228,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text="❌ የላኩት ደረሰኝ ውድቅ ተደርጓል። እባክዎን ትክክለኛ ደረሰኝ ይላኩ።"
             )
         except Exception as e:
-            logging.error(f"Failed to send msg to user: {e}")
+            logging.error(f"Failed to send msg: {e}")
 
     # ADMIN: Withdraw Approve
     elif data.startswith('approve_wd_'):
@@ -192,7 +264,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="❌ የብር ማውጣት ጥያቄዎ ውድቅ ተደርጓል። ለተጨማሪ መረጃ አድሚኑን ያናግሩ።"
         )
 
-# User Message Handling (Deposit/Withdraw Request)
+# User Message Handling
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     action = context.user_data.get('waiting_for_action')
