@@ -1,9 +1,8 @@
 import os
 import logging
-import random
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, 
     MessageHandler, filters, ContextTypes
@@ -24,13 +23,15 @@ def run_health_check_server():
     server.serve_forever()
 
 # ------------------------------------
-# 2. Main Bot Configuration & Logic
+# 2. Main Bot Configuration
 # ------------------------------------
 TOKEN = '8691536980:AAGoA-CCwdTxOm43Wcj9Dovr1TFFc01O-s8'
 ADMIN_IDS = [8607635094]
 TELEBIRR_NO = "0908676709"
 
-ENTRY_FEE = 10.0
+# የ GitHub Pages Mini App ሊንክህ
+WEB_APP_URL = "https://samiakele20-arch.github.io/bingo-bot/"
+
 MIN_DEPOSIT = 10.0
 MIN_WITHDRAW = 100.0
 
@@ -41,29 +42,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# 5x5 የቢንጎ ካርድ ማመንጫ ፈንክሽን
-def generate_bingo_card():
-    col_b = random.sample(range(1, 16), 5)
-    col_i = random.sample(range(16, 31), 5)
-    col_n = random.sample(range(31, 46), 5)
-    col_g = random.sample(range(46, 61), 5)
-    col_o = random.sample(range(61, 76), 5)
-    
-    card_str = "🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧\n"
-    card_str += "  **B**   |  **I**   |  **N**  |  **G**  |  **O**  \n"
-    card_str += "───────────────\n"
-    
-    for row in range(5):
-        b = f"{col_b[row]:02d}"
-        i = f"{col_i[row]:02d}"
-        n = "⭐" if row == 2 else f"{col_n[row]:02d}"
-        g = f"{col_g[row]:02d}"
-        o = f"{col_o[row]:02d}"
-        card_str += f" `{b}` | `{i}` | `{n}` | `{g}` | `{o}` \n"
-        
-    card_str += "🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧🟧"
-    return card_str
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     balance = user_balances.get(user_id, 0.0)
@@ -71,11 +49,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_message = (
         "━━━━━━━━━━━━━━━━━━━\n"
         f"💰 **ቀሪ ሂሳብ (Balance):** `{balance:.2f} ETB`\n"
-        "━━━━━━━━━━━━━━━━━━━"
+        "━━━━━━━━━━━━━━━━━━━\n\n"
+        "🎮 **SamBingo Mini App ለመጫወት ከታች ያለውን ቁልፍ ይጫኑ!**"
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔴 PLAY  |  10 ETB", callback_data='play_10')],
+        # Mini App መክፈቻ WebApp Button
+        [InlineKeyboardButton("🔴 PLAY SAMBINGO 🎲", web_app=WebAppInfo(url=WEB_APP_URL))],
         [InlineKeyboardButton("🔵 Deposit (ብር ለመሙላት)", callback_data='deposit')],
         [InlineKeyboardButton("🟢 Withdraw (ብር ለማውጣት)", callback_data='withdraw')]
     ]
@@ -92,72 +72,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
 
-    # PLAY ሲነካ ወደ Room ይገባል (ብር ገና አይቀነስም!)
-    if data == 'play_10':
-        balance = user_balances.get(user_id, 0.0)
-
-        if balance < ENTRY_FEE:
-            await query.message.reply_text(f"❌ ለጨዋታው በቂ ሂሳብ የለዎትም። ቢያንስ {ENTRY_FEE:.0f} ETB ያስፈልጋል!")
-            return
-
-        # የካርድ መምረጫ Room ባትኖች (Orange Theme)
-        card_keyboard = [
-            [
-                InlineKeyboardButton("🟧 Card #1", callback_data='select_card_1'),
-                InlineKeyboardButton("🟧 Card #2", callback_data='select_card_2')
-            ],
-            [
-                InlineKeyboardButton("🟧 Card #3", callback_data='select_card_3'),
-                InlineKeyboardButton("🟧 Card #4", callback_data='select_card_4')
-            ],
-            [InlineKeyboardButton("🎲 Random Card (በዘፈቀደ መምረጫ)", callback_data='select_card_random')],
-            [InlineKeyboardButton("🔙 ወደ ዋናው ገጽ ተመለስ", callback_data='back_to_start')]
-        ]
-        reply_markup = InlineKeyboardMarkup(card_keyboard)
-
-        await query.message.reply_text(
-            "🟠 **ወደ ቢንጎ ካርድ መምረጫ ክፍል እንኳን ደህና መጡ!** 🟠\n\n"
-            f"💰 የእርስዎ አሁናዊ ቀሪ ሂሳብ፦ `{balance:.2f} ETB`\n"
-            f"🎫 የጨዋታው ዋጋ፦ **10 ETB**\n\n"
-            "👇 እባክዎን ለመጫወት የሚፈልጉትን የካርድ ቁጥር ይምረጡ፦",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-
-    # ካርድ ሲመረጥ ብቻ 10 ብር ተቀንሶ ካርዱ ይወጣል
-    elif data.startswith('select_card_'):
-        balance = user_balances.get(user_id, 0.0)
-        
-        if balance < ENTRY_FEE:
-            await query.message.reply_text("❌ የላከው ሂሳብ በቂ አይደለም! እባክዎን አስቀድመው ዲፖዚት ያድርጉ።")
-            return
-
-        # 10 ብሩ አሁን ይቀነሳል
-        user_balances[user_id] -= ENTRY_FEE
-        card_num = data.split('_')[2]
-        
-        bingo_card_text = generate_bingo_card()
-        
-        card_title = "🎲 Random Bingo Card" if card_num == 'random' else f"🎴 Bingo Card #{card_num}"
-        
-        msg = (
-            f"🎉 **ካርድዎ በትክክል ተመርጧል!**\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📌 **{card_title}**\n\n"
-            f"{bingo_card_text}\n\n"
-            f"✅ **10 ETB ከቀሪ ሂሳብዎ ተቀንሷል።**\n"
-            f"💰 አሁናዊ ቀሪ ሂሳብዎ፦ `{user_balances[user_id]:.2f} ETB`\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            "⏳ *ጨዋታው ተጫዋቾች ተሟልተው ሲጀምሩ ቁጥሮች መውጣት ይጀምራሉ...*"
-        )
-        
-        keyboard = [[InlineKeyboardButton("🔙 ወደ ዋናው ገጽ ተመለስ", callback_data='back_to_start')]]
-        await query.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
-    elif data == 'back_to_start':
-        await start(update, context)
-
-    elif data == 'deposit':
+    if data == 'deposit':
         context.user_data['waiting_for_action'] = 'deposit'
         msg = (
             "📥 **የዲፖዚት መመሪያ፦**\n\n"
@@ -230,40 +145,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"Failed to send msg: {e}")
 
-    # ADMIN: Withdraw Approve
-    elif data.startswith('approve_wd_'):
-        if user_id not in ADMIN_IDS:
-            await query.answer("❌ እርስዎ አድሚን አይደሉም!", show_alert=True)
-            return
-        
-        parts = data.split('_')
-        target_user_id = int(parts[2])
-        amount = float(parts[3])
-
-        current_bal = user_balances.get(target_user_id, 0.0)
-        if current_bal >= amount:
-            user_balances[target_user_id] -= amount
-            await query.edit_message_text(text=f"{query.message.text}\n\n✅ **የማውጣት ጥያቄው ጸድቋል! ብሩ ተቀንሷል።**")
-            await context.bot.send_message(
-                chat_id=target_user_id,
-                text=f"🎉 የ **{amount:.0f} ETB** የብር ማውጣት ጥያቄዎ ጸድቆ በ Telebirr ተልኳል! እናመሰግናለን።"
-            )
-        else:
-            await query.answer("❌ ተጠቃሚው በቂ ሂሳብ የለውም!", show_alert=True)
-
-    # ADMIN: Withdraw Reject
-    elif data.startswith('reject_wd_'):
-        if user_id not in ADMIN_IDS:
-            await query.answer("❌ እርስዎ አድሚን አይደሉም!", show_alert=True)
-            return
-        
-        target_user_id = int(data.split('_')[2])
-        await query.edit_message_text(text=f"{query.message.text}\n\n❌ **የማውጣት ጥያቄው ውድቅ ተደርጓል!**")
-        await context.bot.send_message(
-            chat_id=target_user_id,
-            text="❌ የብር ማውጣት ጥያቄዎ ውድቅ ተደርጓል። ለተጨማሪ መረጃ አድሚኑን ያናግሩ።"
-        )
-
 # User Message Handling
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -300,37 +181,6 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
-
-    elif action == 'withdraw':
-        context.user_data['waiting_for_action'] = None
-        req_text = update.message.text
-        
-        await update.message.reply_text("⏳ የብር ማውጣት ጥያቄዎ ለአድሚን ተልኳል! አድሚኑ ብሩን አስተላልፎ እስኪያጸድቅ ይጠብቁ።")
-        
-        try:
-            amount = float([s for s in req_text.split() if s.isdigit()][0])
-        except Exception:
-            amount = MIN_WITHDRAW
-
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Approve Transfer", callback_data=f'approve_wd_{user_id}_{amount}'),
-                InlineKeyboardButton("❌ Reject", callback_data=f'reject_wd_{user_id}')
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        for admin_id in ADMIN_IDS:
-            await context.bot.send_message(
-                chat_id=admin_id,
-                text=(
-                    f"📤 **አዲስ የብር ማውጣት (Withdrawal) ጥያቄ!**\n\n"
-                    f"👤 ተጠቃሚ ID: `{user_id}`\n"
-                    f"📝 የመልእክት ዝርዝር፦\n`{req_text}`"
-                ),
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
 
 # ------------------------------------
 # 3. Execution Block
