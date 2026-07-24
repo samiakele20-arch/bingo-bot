@@ -5,25 +5,27 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-BOT_TOKEN = "7961917711:AAE4S416E-10-W1T-1a_Vv8p4c1Qf4"
+BOT_TOKEN = "8691536980:AAHu7h0y1gUak9ZqhdIBp3amKS2FV1I5nu4"
 ADMIN_ID = 6870028741
 MINI_APP_URL = "https://samiakele20-arch.github.io/bingo-bot/"
 
 DB_FILE = "balances.json"
 
-# ባላንስ እንዳይጠፋ በፋይል ውስጥ ማስቀመጫ functions
 def load_balances():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return {}
     return {}
 
 def save_balances(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    try:
+        with open(DB_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 user_balances = load_balances()
 
@@ -53,7 +55,6 @@ async def deposit_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # ጽሁፉ ከ "አነስተኛ 10 ብር" ነፃ ሆኗል
     msg = (
         "📥 **የዲፖዚት መመሪያ:-**\n\n"
         "1. በ Telebirr ቁጥር `0908676709` የፈለጉትን የብር መጠን ያስገቡ።\n"
@@ -66,14 +67,14 @@ async def handle_deposit_request(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     text = update.message.caption or update.message.text or ""
     
-    # Telebirr እና CBE SMS ውስጥ ያለውን የብር መጠን በደንብ ይለያል (ምሳሌ: ETB 25.0, 50.00 ETB, etc)
+    # ጽሁፍ ውስጥ ያለውን የብር መጠን ያነብባል (ምሳሌ፦ 25 ETB, ETB 50, 100.00 ብር)
     match = re.search(r'(?:ETB|ብር)\s*([\d\.]+)|([\d\.]+)\s*(?:ETB|ብር)', text, re.IGNORECASE)
     detected_amount = 0.0
     if match:
         val_str = match.group(1) or match.group(2)
         try:
             detected_amount = float(val_str)
-        except:
+        except Exception:
             detected_amount = 0.0
 
     btn_text = f"✅ Approve ({detected_amount} ETB)" if detected_amount > 0 else "✅ Approve"
@@ -115,7 +116,6 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     if action == "app":
         amount = float(data[2]) if len(data) > 2 else 0.0
         
-        # ባላንስ ላይ ይጨምራል፤ ለዘለቄታውም Save ያደርገዋል
         current = user_balances.get(user_id, 0.0)
         user_balances[user_id] = current + amount
         save_balances(user_balances)
@@ -124,7 +124,6 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
         await query.edit_message_text(f"✅ ተጸድቋል! {amount} ETB ለ ID `{user_id}` ተደምሯል። አጠቃላይ ባላንስ: {new_balance} ETB")
         
-        # ለተጠቃሚው አዲሱን ባላንስ ይልካል
         await context.bot.send_message(
             chat_id=int(user_id), 
             text=f"🎉 የ Deposit ጥያቄዎ ጸድቋል!\n\n💰 የተጨመረ: **{amount} ETB**\n💵 አጠቃላይ ባላንስዎ: **{new_balance} ETB**\n\nአዲሱን ባላንስ በ Mini App ለማየት **/start** ብለው ድጋሚ ይክፈቱ።",
