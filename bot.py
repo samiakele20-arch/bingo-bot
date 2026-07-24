@@ -67,7 +67,6 @@ async def handle_deposit_request(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     text = update.message.caption or update.message.text or ""
     
-    # ጽሁፍ ውስጥ ያለውን የብር መጠን ያነብባል (ምሳሌ፦ 25 ETB, ETB 50, 100.00 ብር)
     match = re.search(r'(?:ETB|ብር)\s*([\d\.]+)|([\d\.]+)\s*(?:ETB|ብር)', text, re.IGNORECASE)
     detected_amount = 0.0
     if match:
