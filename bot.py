@@ -5,6 +5,7 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
+# ⚠️ አዲሱን Token እዚህ አስገባ
 BOT_TOKEN = "8691536980:AAHu7h0y1gUak9ZqhdIBp3amKS2FV1I5nu4"
 ADMIN_ID = 6870028741
 MINI_APP_URL = "https://samiakele20-arch.github.io/bingo-bot/"
@@ -38,7 +39,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_balances(user_balances)
 
     current_bal = user_balances[user_id]
-    url_with_balance = f"{MINI_APP_URL}?balance={current_bal}"
+    url_with_balance = f"{MINI_APP_URL}?balance={current_bal}&user_id={user_id}"
 
     keyboard = [
         [InlineKeyboardButton("🔴 PLAY SAMBINGO 🎲", web_app=WebAppInfo(url=url_with_balance))],
@@ -90,14 +91,14 @@ async def handle_deposit_request(update: Update, context: ContextTypes.DEFAULT_T
         await context.bot.send_photo(
             chat_id=ADMIN_ID,
             photo=photo_id,
-            caption=f"📥 **አዲስ የ Deposit ደረሰኝ (Photo)!**\n\nተጠቃሚ: {user.first_name}\nID: `{user.id}`",
+            caption=f"📥 **አዲስ የ Deposit ደረሰኝ (Photo)!**\n\nተጠቃሚ: {user.first_name}\nID: `{user.id}`\nየተገኘ መጠን: {detected_amount} ETB",
             reply_markup=InlineKeyboardMarkup(admin_keyboard),
             parse_mode="Markdown"
         )
     else:
         await context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"📥 **አዲስ የ Deposit ጥያቄ!**\n\nተጠቃሚ: {user.first_name}\nID: `{user.id}`\n\n**ጽሁፍ፦**\n`{text}`",
+            text=f"📥 **አዲስ የ Deposit ጥያቄ!**\n\nተጠቃሚ: {user.first_name}\nID: `{user.id}`\n\n**መልእክት፦**\n`{text}`\n\nየተገኘ መጠን: {detected_amount} ETB",
             reply_markup=InlineKeyboardMarkup(admin_keyboard),
             parse_mode="Markdown"
         )
@@ -138,7 +139,10 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(deposit_info, pattern="^deposit_info$"))
     app.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(app|rej)_"))
-    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_deposit_request))
+    
+    # ፎቶዎችን እና ጽሁፎችን ለመያዝ
+    app.add_handler(MessageHandler(filters.PHOTO | filters.TEXT & (~filters.COMMAND), handle_deposit_request))
+    
     app.run_polling()
 
 if __name__ == '__main__':
