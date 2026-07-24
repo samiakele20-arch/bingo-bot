@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoodBingo Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: #1a1e29; color: white; display: flex; flex-direction: column; height: 100vh; overflow-x: hidden; }
+        
+        /* Top Bar */
+        .header { display: flex; justify-content: space-between; padding: 10px; background: #0f121a; font-size: 12px; font-weight: bold; }
+        .header div { background: #2a2f3d; padding: 5px 10px; border-radius: 5px; }
+        .ball-call { background: #e67e22; color: white; font-size: 18px; text-align: center; padding: 8px; font-weight: bold; }
+
+        /* Main Game Layout */
+        .game-container { display: flex; flex: 1; padding: 5px; gap: 5px; }
+
+        /* Board 1-75 Numbers (Left Side) */
+        .board-75 { width: 35%; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: #0f121a; padding: 4px; border-radius: 5px; max-height: 80vh; overflow-y: auto; }
+        .num-cell { background: #fff; color: #333; font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; height: 22px; border-radius: 3px; }
+        .num-cell.called { background: #f1c40f; color: #000; font-weight: bold; }
+
+        /* Card Section (Right Side) */
+        .cards-container { width: 65%; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+        .bingo-card { background: #ffffff; border-radius: 8px; padding: 5px; color: black; }
+        .bingo-header { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-weight: bold; color: white; margin-bottom: 3px; }
+        .bingo-header div { padding: 3px; border-radius: 3px; }
+        .b-b { background: #2980b9; } .b-i { background: #c0392b; } .b-n { background: #f39c12; } .b-g { background: #27ae60; } .b-o { background: #8e44ad; }
+
+        .bingo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; text-align: center; }
+        .cell { background: #f0f0f0; border: 1px solid #ccc; font-weight: bold; font-size: 14px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; }
+        .cell.selected { background: #2ecc71 !important; color: white; border-color: #27ae60; }
+        .cell.star { background: #27ae60; color: white; font-size: 18px; }
+
+        .bingo-btn { background: #2980b9; color: white; border: none; width: 100%; padding: 8px; font-weight: bold; font-size: 16px; border-radius: 0 0 8px 8px; cursor: pointer; margin-top: 3px; }
+    </style>
+</head>
+<body>
+
+    <!-- Header Stats -->
+    <div class="header">
+        <div>DERASH: <span style="color:#2ecc71">1000 ETB</span></div>
+        <div>BALLS: <span id="ball-count">0</span>/75</div>
+        <div>PLAYERS: <span>12</span></div>
+    </div>
+
+    <!-- Live Called Ball -->
+    <div class="ball-call" id="current-ball">🎮 ጨዋታውን ለመጀመር ይዘጋጁ...</div>
+
+    <div class="game-container">
+        <!-- 1-75 Main Board -->
+        <div class="board-75" id="board-75"></div>
+
+        <!-- Player Bingo Cards -->
+        <div class="cards-container" id="cards-container"></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Generate 1-75 Board
+        const board75 = document.getElementById('board-75');
+        for (let i = 1; i <= 75; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'num-cell';
+            cell.id = `board-num-${i}`;
+            cell.innerText = i;
+            board75.appendChild(cell);
+        }
+
+        // Generate Sample Bingo Card
+        function createCard(cardId) {
+            const container = document.getElementById('cards-container');
+            const card = document.createElement('div');
+            card.className = 'bingo-card';
+
+            card.innerHTML = `
+                <div class="bingo-header">
+                    <div class="b-b">B</div><div class="b-i">I</div><div class="b-n">N</div><div class="b-g">G</div><div class="b-o">O</div>
+                </div>
+                <div class="bingo-grid" id="grid-${cardId}"></div>
+                <button class="bingo-btn" onclick="claimBingo(${cardId})">BINGO!</button>
+            `;
+            container.appendChild(card);
+
+            const grid = document.getElementById(`grid-${cardId}`);
+            
+            // Random Card Numbers Generator
+            let nums = {
+                b: getRandomNums(1, 15, 5),
+                i: getRandomNums(16, 30, 5),
+                n: getRandomNums(31, 45, 5),
+                g: getRandomNums(46, 60, 5),
+                o: getRandomNums(61, 75, 5)
+            };
+
+            for (let r = 0; r < 5; r++) {
+                ['b', 'i', 'n', 'g', 'o'].forEach((col, cIndex) => {
+                    let cell = document.createElement('div');
+                    cell.className = 'cell';
+                    if (col === 'n' && r === 2) {
+                        cell.innerText = '★';
+                        cell.classList.add('star');
+                    } else {
+                        cell.innerText = nums[col][r];
+                        // TAP / TOUCH - Color Change to GREEN
+                        cell.onclick = function() {
+                            this.classList.toggle('selected');
+                        };
+                    }
+                    grid.appendChild(cell);
+                });
+            }
+        }
+
+        function getRandomNums(min, max, count) {
+            let arr = [];
+            while(arr.length < count){
+                let r = Math.floor(Math.random() * (max - min + 1)) + min;
+                if(arr.indexOf(r) === -1) arr.push(r);
+            }
+            return arr;
+        }
+
+        function claimBingo(cardId) {
+            tg.sendData(`BINGO_CLAIM_${cardId}`);
+            alert("🎉 BINGO ጥያቄዎ ተልኳል!");
+        }
+
+        // Load 1 Card for Preview
+        createCard(1);
+
+    </script>
+</body>
+</html>
