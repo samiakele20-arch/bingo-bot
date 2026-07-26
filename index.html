@@ -32,13 +32,13 @@
         .bingo-header { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-weight: bold; color: #f0883e; margin-bottom: 5px; font-size: 16px; }
         .grid-75 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
         .cell-75 { background: #21262d; border-radius: 3px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #c9d1d9; }
-        .cell-75.active { background: #2ea043; color: #fff; font-weight: bold; }
+        .cell-75.called { background: #2ea043; color: #fff; font-weight: bold; animation: pop 0.3s ease-in-out; }
 
         /* Current Called Ball */
         .ball-display {
-            width: 50px; height: 50px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #f0883e, #d25e11);
-            display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold;
-            margin: 0 auto 10px auto; box-shadow: 0 0 10px rgba(240, 136, 62, 0.5);
+            width: 55px; height: 55px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #f0883e, #d25e11);
+            display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold;
+            margin: 0 auto 10px auto; box-shadow: 0 0 12px rgba(240, 136, 62, 0.6); color: #fff;
         }
 
         /* 1-25 Card Selection */
@@ -49,7 +49,7 @@
         .card-item.selected { background: #1f6feb; border-color: #58a6ff; font-weight: bold; }
 
         .action-btn { width: 100%; background: #2ea043; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 10px; cursor: pointer; }
-        .action-btn:disabled { background: #30363d; color: #8b949e; }
+        .action-btn:active { opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -96,10 +96,12 @@
     <script>
         window.Telegram.WebApp.ready();
 
-        // Get URL Params
+        const CARD_PRICE = 10; // 1 ካርድ 10 ETB
         const urlParams = new URLSearchParams(window.location.search);
-        const userBalance = parseFloat(urlParams.get('balance') || '0');
-        document.getElementById('bal-val').innerText = userBalance.toFixed(1) + " ETB";
+        let currentBalance = parseFloat(urlParams.get('balance') || '0');
+        let initialBalance = currentBalance;
+
+        document.getElementById('bal-val').innerText = currentBalance.toFixed(1) + " ETB";
 
         // Generate 1-75 Board
         const board75 = document.getElementById('board-75');
@@ -119,29 +121,53 @@
             card.className = 'card-item';
             card.innerText = `ካርድ ${i}`;
             card.onclick = function() {
-                if(userBalance < 10) {
-                    alert("⚠️ በቂ ባላንስ የለዎትም! ካርድ ለመግዛት ቢያንስ 10 ETB ያስፈልጋል።");
-                    return;
+                if(!this.classList.contains('selected')) {
+                    if(currentBalance < CARD_PRICE) {
+                        alert("⚠️ በቂ ባላንስ የለዎትም! እባክዎን አስቀድመው ዲፖዚት ያድርጉ።");
+                        return;
+                    }
+                    this.classList.add('selected');
+                    currentBalance -= CARD_PRICE;
+                    selectedCards++;
+                } else {
+                    this.classList.remove('selected');
+                    currentBalance += CARD_PRICE;
+                    selectedCards--;
                 }
-                this.classList.toggle('selected');
-                selectedCards = document.querySelectorAll('.card-item.selected').length;
-                updateCalculations();
+                
+                updateUI();
             };
             cards25.appendChild(card);
         }
 
-        function updateCalculations() {
-            const totalBet = selectedCards * 10; // Each card 10 ETB
+        function updateUI() {
+            document.getElementById('bal-val').innerText = currentBalance.toFixed(1) + " ETB";
+            const totalBet = selectedCards * CARD_PRICE;
             const derash = totalBet * 0.85; // 85% Winning Pool
             document.getElementById('derash-val').innerText = derash.toFixed(1) + " ETB";
         }
+
+        // Auto Random Ball Caller (በየ 4 ሰከንዱ ቁጥር ይጠራል)
+        let uncalledBalls = Array.from({length: 75}, (_, i) => i + 1);
+        setInterval(() => {
+            if (uncalledBalls.length > 0 && selectedCards > 0) {
+                const randomIndex = Math.floor(Math.random() * uncalledBalls.length);
+                const calledNum = uncalledBalls.splice(randomIndex, 1)[0];
+
+                document.getElementById('main-ball').innerText = calledNum;
+                document.getElementById('ball-val').innerText = calledNum;
+
+                const targetCell = document.getElementById(`c-${calledNum}`);
+                if(targetCell) targetCell.classList.add('called');
+            }
+        }, 4000);
 
         function claimBingo() {
             if(selectedCards === 0) {
                 alert("እባክዎን አስቀድመው ቢያንስ 1 ካርድ ይምረጡ!");
                 return;
             }
-            alert("BINGO ጥያቄዎ ተልኳል!");
+            alert("🎉 BINGO! ጥያቄዎ ለአድሚን ማረጋገጫ ተልኳል።");
         }
     </script>
 </body>
