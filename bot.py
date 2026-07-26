@@ -1,147 +1,196 @@
 import logging
-import re
-import json
-import os
+import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# ⚠️ የአዲሱ ቦትህ Token
-BOT_TOKEN = "8691536980:AAHu7h0y1gUak9ZqhdIBp3amKS2FV1I5nu4"
-ADMIN_ID = 6870028741
-MINI_APP_URL = "https://samiakele20-arch.github.io/bingo-bot/"
+# Admin Telegram ID from notes
+ADMIN_ID = 8607635094
+# Replace with your actual Web App URL from Render/Vercel
+WEB_APP_URL = "https://your-bingo-app.onrender.com"
 
-DB_FILE = "balances.json"
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-def load_balances():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+# --- Database Setup ---
+def init_db():
+    conn = sqlite3.connect('bingo_bot.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            full_name TEXT,
+            balance REAL DEFAULT 0.0
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            type TEXT,
+            amount REAL,
+            status TEXT,
+            receipt_info TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-def save_balances(data):
-    try:
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f, indent=4)
-    except Exception:
-        pass
+init_db()
 
-user_balances = load_balances()
+def get_user_balance(user_id):
+    conn = sqlite3.connect('bingo_bot.db')
+    c = conn.cursor()
+    c.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 0.0
 
-logging.basicConfig(level=logging.INFO)
+def update_user_balance(user_id, amount):
+    conn = sqlite3.connect('bingo_bot.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+    conn.commit()
+    conn.close()
 
+# --- Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    if user_id not in user_balances:
-        user_balances[user_id] = 0.0
-        save_balances(user_balances)
+    user = update.effective_user
+    conn = sqlite3.connect('bingo_bot.db')
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO users (user_id, username, full_name, balance) VALUES (?, ?, ?, 0.0)",
+              (user.id, user.username or "", user.full_name))
+    conn.commit()
+    conn.close()
 
-    current_bal = user_balances[user_id]
-    url_with_balance = f"{MINI_APP_URL}?balance={current_bal}&user_id={user_id}"
+    welcome_text = (
+        f"ሰላም {user.full_name}! እንኳን ወደ Sambingo Bot በደህና መጡ።\n\n"
+        f"ያልዎት ባላንስ: {get_user_balance(user.id)} Birr\n"
+        "እባክዎን ከታች ካሉት አማራጮች አንዱን ይምረጡ፡"
+    )
 
     keyboard = [
-        [InlineKeyboardButton("🔴 PLAY SAMBINGO 🎲", web_app=WebAppInfo(url=url_with_balance))],
-        [InlineKeyboardButton("💳 Deposit (ብር ለመሙላት)", callback_data="deposit_info")],
-        [InlineKeyboardButton("🟢 Withdraw (ብር ለማውጣት)", callback_data="withdraw_info")]
+        [InlineKeyboardButton("🎮 Play 10 birr", web_app=WebAppInfo(url=WEB_APP_URL))],
+        [InlineKeyboardButton("💳 Deposit", callback_data="deposit"),
+         InlineKeyboardButton("🏧 Withdraw", callback_data="withdraw")]
     ]
-    await update.message.reply_text(
-        f"ሰላም {update.effective_user.first_name}! ወደ SamBingo እንኳን ደህና መጡ።\n\n💰 **የአሁኑ ባላንስዎ: {current_bal} ETB**",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-async def deposit_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    msg = (
-        "📥 **የዲፖዚት መመሪያ:-**\n\n"
-        "1. በ Telebirr ቁጥር `0908676709` የፈለጉትን የብር መጠን ያስገቡ።\n"
-        "2. የላኩበትን ደረሰኝ (Screenshot) ወይም የባንክ SMS መልእክት Copy አድርገው እዚህ ይላኩ።\n\n"
-        "⚠️ ደረሰኙ በአድሚን ተመርምሮ ሂሳብዎ ይሞላል!"
-    )
-    await query.message.reply_text(msg, parse_mode="Markdown")
 
-async def handle_deposit_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if query.data == "deposit":
+        msg = (
+            "📥 **Deposit ለማድረግ፡**\n\n"
+            "1. በ **0908676709** (CBE / Telebirr) ብሩን ያስገቡ።\n"
+            "2. የላኩበትን ደረሰኝ/ጽሁፍ (Copy አድርገው) ወይም Screenshot ለዚሁ ቦት ይላኩ።"
+        )
+        await query.message.reply_text(msg, parse_mode="Markdown")
+
+    elif query.data == "withdraw":
+        context.user_data['state'] = 'awaiting_withdraw_info'
+        await query.message.reply_text(
+            "🏧 **Withdraw ለማድረግ፡**\n"
+            "እባክዎን ሙሉ ስምዎን እና ስልክ ቁጥርዎን ይላኩ፡"
+        )
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    text = update.message.caption or update.message.text or ""
-    
-    match = re.search(r'(?:ETB|ብር)\s*([\d\.]+)|([\d\.]+)\s*(?:ETB|ብር)', text, re.IGNORECASE)
-    detected_amount = 0.0
-    if match:
-        val_str = match.group(1) or match.group(2)
+    state = context.user_data.get('state')
+
+    if state == 'awaiting_withdraw_info':
+        info = update.message.text
+        context.user_data['withdraw_info'] = info
+        context.user_data['state'] = 'awaiting_withdraw_amount'
+        await update.message.reply_text("እባክዎን ማውጣት የሚፈልጉትን የብር መጠን ያስገቡ፡")
+
+    elif state == 'awaiting_withdraw_amount':
         try:
-            detected_amount = float(val_str)
-        except Exception:
-            detected_amount = 0.0
+            amount = float(update.message.text)
+            curr_bal = get_user_balance(user.id)
+            if amount > curr_bal:
+                await update.message.reply_text("❌ በቂ ባላንስ የለዎትም። እባክዎን በድጋሚ ይሞክሩ።")
+                context.user_data['state'] = None
+                return
 
-    btn_text = f"✅ Approve ({detected_amount} ETB)" if detected_amount > 0 else "✅ Approve"
+            info = context.user_data.get('withdraw_info', '')
+            context.user_data['state'] = None
+            await update.message.reply_text("ያቀረቡት የ Withdraw ጥያቄ ለአድሚን ተልኳል። በጥቂት ደቂቃዎች ውስጥ ይረጋገጣል።")
 
-    admin_keyboard = [
-        [
-            InlineKeyboardButton(btn_text, callback_data=f"app_{user.id}_{detected_amount}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"rej_{user.id}")
-        ]
-    ]
+            # Send to Admin
+            admin_btn = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Approve", callback_data=f"app_w_{user.id}_{amount}"),
+                 InlineKeyboardButton("❌ Reject", callback_data=f"rej_w_{user.id}_{amount}")]
+            ])
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"🚨 **የ Withdraw ጥያቄ**\nተጠቃሚ: {user.full_name} (@{user.username})\nID: {user.id}\nመረጃ: {info}\nየተጠየቀው ብር: {amount} Birr",
+                reply_markup=admin_btn,
+                parse_mode="Markdown"
+            )
+        except ValueError:
+            await update.message.reply_text("እባክዎን ትክክለኛ የብር ቁጥር ያስገቡ።")
 
-    if update.message.photo:
-        photo_id = update.message.photo[-1].file_id
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=photo_id,
-            caption=f"📥 **አዲስ የ Deposit ደረሰኝ (Photo)!**\n\nተጠቃሚ: {user.first_name}\nID: `{user.id}`\nየተገኘ መጠን: {detected_amount} ETB",
-            reply_markup=InlineKeyboardMarkup(admin_keyboard),
-            parse_mode="Markdown"
-        )
     else:
+        # Assume screenshot or deposit text receipt
+        await update.message.reply_text("ደረሰኝዎ በመመርመር ላይ ነው። እባክዎን ትንሽ ይጠብቁ...")
+
+        # Forward receipt to admin
+        admin_btn = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Approve", callback_data=f"app_d_{user.id}"),
+             InlineKeyboardButton("❌ Reject", callback_data=f"rej_d_{user.id}")]
+        ])
+        
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"📩 **አዲስ የ Deposit ደረሰኝ ከ {user.full_name} (@{user.username}) [ID: {user.id}]**")
+        await update.message.forward(chat_id=ADMIN_ID)
         await context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"📥 **አዲስ የ Deposit ጥያቄ!**\n\nተጠቃሚ: {user.first_name}\nID: `{user.id}`\n\n**መልእክት፦**\n`{text}`\n\nየተገኘ መጠን: {detected_amount} ETB",
-            reply_markup=InlineKeyboardMarkup(admin_keyboard),
-            parse_mode="Markdown"
+            text=f"የ Deposit ብር መጠን ስንት ይሁን? (ጸድቅ ከተጫነ በኋላ የሚጨመር መጠን):",
+            reply_markup=admin_btn
         )
-        
-    await update.message.reply_text("⏳ ደረሰኝዎ ለአድሚን ተልኳል! ተመርምሮ ሂሳብዎ ይሞላል።")
 
-async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    data = query.data
     await query.answer()
 
-    data = query.data.split("_")
-    action = data[0]
-    user_id = str(data[1])
+    if data.startswith("app_d_"):
+        user_id = int(data.split("_")[2])
+        context.user_data[f"dep_user_{ADMIN_ID}"] = user_id
+        await query.message.reply_text(f"እባክዎን ለተጠቃሚ {user_id} የሚጨመረውን የብር መጠን በቁጥር ያስገቡ (ምሳሌ: 100):")
 
-    if action == "app":
-        amount = float(data[2]) if len(data) > 2 else 0.0
-        
-        current = user_balances.get(user_id, 0.0)
-        user_balances[user_id] = current + amount
-        save_balances(user_balances)
+    elif data.startswith("rej_d_"):
+        user_id = int(data.split("_")[2])
+        await context.bot.send_message(chat_id=user_id, text="❌ የ Deposit ደረሰኝዎ ውድቅ ተደርጓል።")
+        await query.edit_message_text("❌ Deposit ውድቅ ተደርጓል።")
 
-        new_balance = user_balances[user_id]
+    elif data.startswith("app_w_"):
+        parts = data.split("_")
+        user_id = int(parts[2])
+        amount = float(parts[3])
+        update_user_balance(user_id, -amount)
+        await context.bot.send_message(chat_id=user_id, text=f"✅ የ {amount} Birr Withdraw ጥያቄዎ ጸድቋል! ገንዘቡ ተልኳል።")
+        await query.edit_message_text("✅ Withdraw ጸድቋል።")
 
-        await query.edit_message_text(f"✅ ተጸድቋል! {amount} ETB ለ ID `{user_id}` ተደምሯል። አጠቃላይ ባላንስ: {new_balance} ETB")
-        
-        await context.bot.send_message(
-            chat_id=int(user_id), 
-            text=f"🎉 የ Deposit ጥያቄዎ ጸድቋል!\n\n💰 የተጨመረ: **{amount} ETB**\n💵 አጠቃላይ ባላንስዎ: **{new_balance} ETB**\n\nአዲሱን ባላንስ በ Mini App ለማየት **/start** ብለው ድጋሚ ይክፈቱ።",
-            parse_mode="Markdown"
-        )
-
-    elif action == "rej":
-        await query.edit_message_text(f"❌ የ ID `{user_id}` ጥያቄ ውድቅ ተደርጓል።")
-        await context.bot.send_message(chat_id=int(user_id), text="❌ ደረሰኝዎ ውድቅ ተደርጓል። እባክዎን ትክክለኛ ደረሰኝ ይላኩ።")
+    elif data.startswith("rej_w_"):
+        parts = data.split("_")
+        user_id = int(parts[2])
+        await context.bot.send_message(chat_id=user_id, text="❌ የ Withdraw ጥያቄዎ ውድቅ ተደርጓል።")
+        await query.edit_message_text("❌ Withdraw ውድቅ ተደርጓል።")
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    # Insert Telegram Bot Token here
+    TOKEN = "8843682933:AAFm81z7Z5sd-5PSSYEgRDtMRvMJu9n7Oxw"
+    app = ApplicationBuilder().token(TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(deposit_info, pattern="^deposit_info$"))
-    app.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(app|rej)_"))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.TEXT & (~filters.COMMAND), handle_deposit_request))
-    
+    app.add_handler(CallbackQueryHandler(button_click, pattern="^(deposit|withdraw)$"))
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(app_d_|rej_d_|app_w_|rej_w_)"))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
+
+    print("Bot is running...")
     app.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
