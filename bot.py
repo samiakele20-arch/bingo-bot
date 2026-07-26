@@ -5,7 +5,7 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-# ⚠️ አዲሱን Token እዚህ አስገባ
+# ⚠️ የአዲሱ ቦትህ Token
 BOT_TOKEN = "8691536980:AAHu7h0y1gUak9ZqhdIBp3amKS2FV1I5nu4"
 ADMIN_ID = 6870028741
 MINI_APP_URL = "https://samiakele20-arch.github.io/bingo-bot/"
@@ -139,8 +139,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(deposit_info, pattern="^deposit_info$"))
     app.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(app|rej)_"))
-    
-    # ፎቶዎችን እና ጽሁፎችን ለመያዝ
     app.add_handler(MessageHandler(filters.PHOTO | filters.TEXT & (~filters.COMMAND), handle_deposit_request))
     
     app.run_polling()
